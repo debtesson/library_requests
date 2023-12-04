@@ -1,0 +1,17 @@
+(		
+select sum(case when contactibilite_EMAIL > 1 then 1 else contactibilite_EMAIL end) as Nb_contactibilite_EMAIL		
+, sum(case when contactibilite_SMS > 1 then 1 else contactibilite_SMS end) as Nb_contactibilite_SMS		
+from		
+(		
+	select person_code	
+	, sum(case when contact_channel_type_code = 'CHT_04' then 1 else 0 end) as contactibilite_EMAIL	
+	, sum(case when contact_channel_type_code = 'CHT_06' then 1 else 0 end) as contactibilite_SMS	
+	from  `auchan-ukr-prod.edm_customer_sec.d_person_contact`	
+	where contact_channel_type_code in ('CHT_04', 'CHT_06')	
+	and contact_optin_channel = 'true'	
+	and data_validity_flg is true	
+	and contact_channel_main_flg is true	
+	group by person_code	
+	/*having sum(case when contact_channel_type_code = 'CHT_04' then 1 else 0 end) > 1	
+	or sum(case when contact_channel_type_code = 'CHT_06' then 1 else 0 end) > 1*/	
+	) CONTACTIBILITE	
