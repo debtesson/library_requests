@@ -1,0 +1,58 @@
+
+WITH 
+
+-- creation de la table des doublons restrictifs même nom, même prénom, même date de naissance (mode restrictif)
+
+doublons as (
+SELECT person_unique_code,person_firstname,person_lastname,person_birthdate,cre_date,person_registration_date,person_cre_app FROM `auchan-pol-prod.edm_customer_sec.d_person` t1
+WHERE EXISTS
+( SELECT person_unique_code,person_firstname,person_lastname,person_birthdate,cre_date FROM `auchan-pol-prod.edm_customer_sec.d_person` t2
+WHERE t1.person_unique_code <> t2.person_unique_code
+AND lower(t1.person_firstname) = lower(t2.person_firstname) ---le lower permet d'avoir tous les prénoms en minuscule
+AND lower(t1.person_lastname) = lower(t2.person_lastname) --- Le lower permet d'avoir tous les noms en minuscule
+AND t1.person_birthdate = t2.person_birthdate
+AND person_birthdate NOT IN ("1900-01-01")
+AND person_birthdate is not null
+AND person_birthdate NOT IN ("1925-02-02","1900-01-01","1990-01-01")
+AND person_code is not null  
+AND person_lastname is not null
+AND lower (person_lastname) NOT IN ("defaultvalue")
+AND person_deceased_flg = false
+AND person_del_flg = false)
+order by lower(t1.person_lastname),lower(t1.person_firstname)),
+
+
+-- donner un même numéro aux doublons pour les identifier
+
+numeroration as 
+( select person_unique_code,person_firstname,person_lastname,person_birthdate,person_registration_date,person_cre_app,
+rank() over (order by lower(person_lastname),lower(person_firstname),
+person_birthdate ) as rnum from doublons
+)
+
+,
+
+-- récupérer les emails sur ces doublons
+
+email as
+( select distinct CONCAT('PL_SF_',countrycustomerid) as person_unique_code,messageid as msg_id,contactdate as contact_date,label
+from `auchan-pol-prod.raw_salesforce_customeractivation.email_send_log` as f
+where 1=1 and contactdate between '2023-11-01 00:00:00 UTC' and '2023-12-01 00:00:00 UTC'  and status=1
+AND LOWER(subject) NOT LIKE "%test%" 
+AND LOWER(subject) NOT LIKE "%template%"
+and CONCAT('PL_SF_',countrycustomerid)in (select person_unique_code from numeroration)),
+
+
+
+-- garder les emails qui sont envoyés plusieurs fois pour les doublons
+emails_multiples as
+(select rnum,label,contact_date,count(email.person_unique_code) as compte from email 
+inner join numeroration on numeroration.person_unique_code = email.person_unique_code
+group by rnum,label,contact_date
+having count(email.person_unique_code)>1
+order by rnum)
+
+-- compter le nombre d'envois qui n'auraient pas dû être
+
+select sum(compte-1)
+from emails_multiples
