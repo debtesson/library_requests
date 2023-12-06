@@ -1,7 +1,6 @@
-
 WITH 
 
--- creation de la table des doublons restrictifs même nom, même prénom, même date de naissance (mode restrictif)
+-- creation de la table des doublons restrictifs même nom, même prénom, même date de naissance 
 
 doublons as (
 SELECT person_unique_code,person_firstname,person_lastname,person_birthdate,cre_date,person_registration_date,person_cre_app FROM `auchan-pol-prod.edm_customer_sec.d_person` t1
@@ -18,8 +17,10 @@ AND person_code is not null
 AND person_lastname is not null
 AND lower (person_lastname) NOT IN ("defaultvalue")
 AND person_deceased_flg = false
-AND person_del_flg = false)
-order by lower(t1.person_lastname),lower(t1.person_firstname)),
+AND person_del_flg = false
+)
+order by lower(t1.person_lastname),lower(t1.person_firstname)
+),
 
 
 -- donner un même numéro aux doublons pour les identifier
@@ -32,27 +33,32 @@ person_birthdate ) as rnum from doublons
 
 ,
 
--- récupérer les emails sur ces doublons
+-- récupérer les envois d'emails sur ces doublons
 
 email as
-( select distinct CONCAT('PL_SF_',countrycustomerid) as person_unique_code,messageid as msg_id,contactdate as contact_date,label
-from `auchan-pol-prod.raw_salesforce_customeractivation.email_send_log` as f
-where 1=1 and contactdate between '2023-11-01 00:00:00 UTC' and '2023-12-01 00:00:00 UTC'  and status=1
-AND LOWER(subject) NOT LIKE "%test%" 
-AND LOWER(subject) NOT LIKE "%template%"
-and CONCAT('PL_SF_',countrycustomerid)in (select person_unique_code from numeroration)),
+( select distinct CONCAT('PL_SF_',person_code) as person_unique_code,contact_channel_value
+from `auchan-pol-prod.edm_customer_sec.d_person_contact` 
+where contact_channel_type_code in ('CHT_04') 
+  and contact_optin_channel = 'true'  
+  and data_validity_flg is true 
+  and contact_channel_main_flg is true  
+and CONCAT('PL_SF_',person_code)in (select person_unique_code from numeroration)),
 
 
 
 -- garder les emails qui sont envoyés plusieurs fois pour les doublons
-emails_multiples as
-(select rnum,label,contact_date,count(email.person_unique_code) as compte from email 
+email_doublons as
+(select rnum,email.person_unique_code,contact_channel_value,count(email.person_unique_code) as compte from email 
 inner join numeroration on numeroration.person_unique_code = email.person_unique_code
-group by rnum,label,contact_date
-having count(email.person_unique_code)>1
-order by rnum)
+group by rnum,person_unique_code,contact_channel_value
+order by rnum),
 
--- compter le nombre d'envois qui n'auraient pas dû être
+-- nombre d'emails par groupe de doublons
+quantite_emails as
+(select rnum, sum(compte) as nombre from email_doublons
+group by rnum )
 
-select sum(compte-1)
-from emails_multiples
+
+select nombre, count(rnum) as effectif
+from quantite_emails
+group by nombre
