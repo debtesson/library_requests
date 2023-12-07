@@ -1,0 +1,33 @@
+SELECT person_unique_code,
+person_firstname,
+person_lastname,
+person_birthdate,
+cre_date,
+person_registration_date,
+person_cre_app 
+FROM `auchan-pol-prod.edm_customer_sec.d_person` t1
+WHERE EXISTS
+( SELECT 
+person_unique_code,
+person_firstname,
+person_lastname,
+person_birthdate,
+cre_date 
+FROM `auchan-pol-prod.edm_customer_sec.d_person` t2
+WHERE t1.person_unique_code <> t2.person_unique_code
+AND lower(t1.person_firstname) = lower(t2.person_firstname) ---le lower permet d'avoir tous les prénoms en minuscule
+AND lower(t1.person_lastname) = lower(t2.person_lastname) --- Le lower permet d'avoir tous les noms en minuscule
+AND t1.person_birthdate = t2.person_birthdate
+AND person_birthdate is not null
+AND person_birthdate NOT IN ("1925-02-02","1900-01-01","1990-01-01")
+AND person_code is not null  
+AND person_lastname is not null
+AND lower (person_lastname) NOT IN ("defaultvalue")
+AND person_deceased_flg = false
+AND person_del_flg = false)
+and person_unique_code  in (
+SELECT person_unique_code 
+FROM   `auchan-pol-prod.edm_sales.f_basket_header`      AS basket_header
+INNER JOIN   `auchan-pol-prod.edm_sales.d_basket_status`  AS basket_status
+ON   basket_header.basket_unique_code= basket_status.basket_unique_code
+WHERE basket_status.basket_status_sde IN ("COMPLETED", "RETURN"))
