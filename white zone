@@ -1,0 +1,35 @@
+SELECT
+   split as pop,
+   site_format_unique_code,
+    ROUND(SUM(amt_paid_w_tax),2)                         AS amnt,  
+    SUM(ABS(nbr_products))                               AS Items,
+    COUNT(DISTINCT basket_header.basket_unique_code)     AS Tickets
+  FROM
+    `auchan-prt-prod.edm_sales.f_basket_header`          AS basket_header
+  INNER JOIN
+    `auchan-prt-prod.edm_sales.d_basket_status`          AS basket_status
+  ON
+    basket_header.basket_unique_code= basket_status.basket_unique_code
+  INNER JOIN
+  `ard-corp-eswora-sandbox.white_zone.split_stratified` AS pop
+  ON
+  pop.person_unique_code=basket_header.person_unique_code
+
+LEFT JOIN
+  `auchan-prt-prod.edm_site.b_site_format_link` AS b_site_format_link
+ON
+  basket_header.site_unique_code = b_site_format_link.site_unique_code
+AND
+  b_site_format_link.site_format_current_flg IS TRUE   
+AND 
+  (b_site_format_link.is_deleted IS NULL OR b_site_format_link.is_deleted = FALSE)
+  WHERE
+    basket_header._partitionDate BETWEEN '2023-07-05' AND '2023-09-05'
+  AND 
+    b_site_format_link.site_format_start_date BETWEEN '2023-07-05' AND '2023-09-05'
+  AND
+    basket_status.basket_status_sde IN ("COMPLETE", "CANCELED")
+
+  GROUP BY
+    pop,
+    site_format_unique_code
